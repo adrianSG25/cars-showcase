@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Mis Coches & CarDex — Cómo se hizo (Ingeniería & Visión IA)</title>
+<style>
+:root{
+  --cyan:#22d3ee; --sky:#38bdf8; --indigo:#6366f1; --violet:#a855f7; --amber:#fbbf24;
+  --orange:#fb923c; --rose:#f43f5e; --red:#e11d48; --green:#10b981; --emerald:#059669;
+  --gold:#f59e0b; --text:#f5f5f7; --muted:#8e8e93; --panel:#121318; --line:rgba(255,255,255,.1);
+  --carbon:repeating-linear-gradient(45deg,rgba(0,0,0,.9) 0,rgba(0,0,0,.9) 2px,rgba(25,25,28,.9) 2px,rgba(25,25,28,.9) 4px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{background:#07080b;overflow-x:hidden}
+body{background:#07080b;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.scene{position:relative;width:100%}
+.sticky{position:sticky;top:0;height:100vh;height:100dvh;width:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.col{flex-direction:column}
+.kicker{font-size:.78rem;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan);margin-bottom:.6rem;display:flex;align-items:center;gap:7px}
+.kicker::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--rose);box-shadow:0 0 10px var(--rose)}
+h1{font-size:clamp(2.1rem,5.6vw,5.5rem);font-weight:900;letter-spacing:-.04em;line-height:1}
+h2{font-size:clamp(1.5rem,3.8vw,3.6rem);font-weight:800;letter-spacing:-.035em;line-height:1.08}
+.grad{background:linear-gradient(90deg,var(--cyan),#6366f1 45%,var(--rose));-webkit-background-clip:text;background-clip:text;color:transparent}
+.grad-fire{background:linear-gradient(90deg,#fbbf24,#fb923c 45%,#f43f5e);-webkit-background-clip:text;background-clip:text;color:transparent}
+.grad-gold{background:linear-gradient(90deg,#fde047,#f59e0b 50%,#b45309);-webkit-background-clip:text;background-clip:text;color:transparent}
+.grad-eco{background:linear-gradient(90deg,#6ee7b7,#10b981 50%,#047857);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{font-size:clamp(.92rem,1.3vw,1.24rem);color:var(--muted);line-height:1.5;max-width:54ch}
+.lead b{color:var(--text)}
+code,.mono{font-family:"SF Mono","Cascadia Code",Consolas,monospace}
+code{background:rgba(255,255,255,.08);padding:.14em .45em;border-radius:6px;font-size:.88em;color:#a5f3fc}
+.head-top{position:absolute;top:calc(48px + 2vh);left:0;right:0;text-align:center;z-index:5;padding:0 5vw}
+.card{background:linear-gradient(165deg,rgba(24,25,32,.94),rgba(11,12,16,.98));border:1px solid var(--line);border-radius:20px;padding:1.2rem;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+
+/* Top bar & navigation telemetry */
+#topnav{position:fixed;top:0;left:0;right:0;height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:70;background:rgba(7,8,11,.82);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line);font-size:.78rem;color:#d1d5db}
+#topnav b{color:#fff;letter-spacing:.04em;display:flex;align-items:center;gap:6px;white-space:nowrap}
+#bar{position:fixed;top:48px;left:0;height:2.5px;width:0;background:linear-gradient(90deg,var(--cyan),var(--rose),var(--gold));z-index:71;box-shadow:0 0 14px var(--cyan)}
+#dots{position:fixed;right:18px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:11px;z-index:70}
+#dots a{display:block;width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);position:relative;transition:all .3s cubic-bezier(.16,1,.3,1);cursor:pointer}
+#dots a.on{background:var(--rose);transform:scale(1.7);box-shadow:0 0 14px var(--rose)}
+#dots a span{position:absolute;right:16px;top:50%;transform:translateY(-50%);white-space:nowrap;font-size:.7rem;font-weight:700;color:#fff;opacity:0;transition:.2s;pointer-events:none;background:rgba(12,13,18,.9);padding:.22rem .55rem;border-radius:6px;border:1px solid var(--line)}
+#dots a:hover span{opacity:1}
+
+/* Gyroscope status badge */
+.gyro-pill{display:flex;align-items:center;gap:5px;font-size:.68rem;font-weight:800;padding:3px 8px;border-radius:99px;background:rgba(34,211,238,.12);border:1px solid var(--cyan);color:var(--cyan);cursor:pointer}
+.gyro-dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:pulseGyro 1.5s infinite}
+@keyframes pulseGyro{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
+
+/* ============================================================
+   SCENE 1: DIGITAL WIND TUNNEL HERO
+   ============================================================ */
+#windCanvas{position:absolute;inset:0;width:100%;height:100%}
+.hero-telemetry{position:absolute;right:6vw;top:50%;transform:translateY(-50%);width:min(360px,36vw);z-index:3;display:flex;flex-direction:column;gap:12px}
+.telem-box{background:rgba(15,17,23,.85);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:12px 16px;backdrop-filter:blur(10px)}
+.telem-box small{font-size:.65rem;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--cyan);display:block}
+.telem-box .val{font-size:clamp(1.6rem,2.8vw,2.2rem);font-weight:900;letter-spacing:-.03em;color:#fff;line-height:1.1;margin-top:2px}
+.telem-box .unit{font-size:.8rem;color:var(--muted);font-weight:600;margin-left:4px}
+.telem-bar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;margin-top:6px;overflow:hidden;position:relative}
+.telem-bar i{position:absolute;left:0;top:0;height:100%;width:84%;background:linear-gradient(90deg,var(--cyan),var(--rose));border-radius:3px;box-shadow:0 0 10px var(--rose)}
+.hero-text{position:absolute;left:6vw;top:50%;transform:translateY(-50%);max-width:min(600px,52vw);z-index:3}
+.hero-text .tags{margin-top:1.2rem;display:flex;flex-wrap:wrap;gap:6px}
+.hero-tag{display:inline-block;font-size:.72rem;font-weight:700;padding:.28rem .7rem;border-radius:99px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:#e2e8f0}
+.scroll-cue{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;font-size:.68rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;z-index:3}
+.mouse{width:20px;height:34px;border:2px solid rgba(255,255,255,.4);border-radius:11px;position:relative}
+.mouse::after{content:"";position:absolute;left:50%;top:5px;width:3px;height:6px;margin-left:-1.5px;border-radius:2px;background:var(--rose);animation:wheel 1.5s infinite}
+@keyframes wheel{0%{opacity:0;transform:translateY(0)}35%{opacity:1}100%{opacity:0;transform:translateY(11px)}}
+
+/* Mobile Floating Telemetry */
+.mobile-telem-strip{display:none;position:absolute;bottom:70px;left:5vw;right:5vw;background:rgba(12,14,20,.88);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:8px 14px;align-items:center;justify-content:space-between;z-index:4;backdrop-filter:blur(10px)}
+.mobile-telem-strip .m-val{font-size:.85rem;font-weight:900;color:#fff}
+.mobile-telem-strip .m-lbl{font-size:.65rem;color:var(--cyan);font-weight:800;display:block}
+
+/* ============================================================
+   SCENE 2: COMPUTER VISION & LASER OCR HUD
+   ============================================================ */
+.scanner-stage{position:relative;width:min(1180px,92vw);height:min(560px,68dvh);background:radial-gradient(ellipse at 50% 50%,#111625,#090a0f 75%);border:1px solid rgba(255,255,255,.14);border-radius:24px;overflow:hidden;box-shadow:0 30px 100px rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center}
+.scanner-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(34,211,238,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,.05) 1px,transparent 1px);background-size:28px 28px}
+.laser-beam{position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--cyan) 25%,#fff 50%,var(--cyan) 75%,transparent);box-shadow:0 0 24px var(--cyan),0 0 8px #fff;z-index:10;pointer-events:none}
+.car-silhouette-mock{position:relative;width:min(700px,80%);height:auto;z-index:4}
+.bbox{position:absolute;border:2px solid;border-radius:8px;pointer-events:none;transition:all .3s cubic-bezier(.16,1,.3,1)}
+.bbox .tag-ai{position:absolute;top:-24px;left:0;font-size:.64rem;font-weight:800;padding:2px 7px;border-radius:5px;background:#000;border:1px solid;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.bbox-car{left:6%;top:18%;width:88%;height:64%;border-color:var(--cyan);box-shadow:0 0 25px rgba(34,211,238,.2)}
+.bbox-car .tag-ai{color:var(--cyan);border-color:var(--cyan)}
+.bbox-plate{left:8%;bottom:22%;width:26%;height:22%;border-color:var(--amber);box-shadow:0 0 20px rgba(251,191,36,.3)}
+.bbox-plate .tag-ai{color:var(--amber);border-color:var(--amber)}
+.bbox-wing{right:8%;top:20%;width:22%;height:30%;border-color:var(--rose);box-shadow:0 0 20px rgba(244,63,94,.3)}
+.bbox-wing .tag-ai{color:var(--rose);border-color:var(--rose)}
+.hud-corner{position:absolute;width:14px;height:14px;border:2px solid var(--cyan)}
+.hud-tl{top:10px;left:10px;border-right:none;border-bottom:none}
+.hud-tr{top:10px;right:10px;border-left:none;border-bottom:none}
+.hud-bl{bottom:10px;left:10px;border-right:none;border-top:none}
+.hud-br{bottom:10px;right:10px;border-left:none;border-top:none}
+.scan-telemetry{position:absolute;left:16px;top:16px;font-family:Consolas,monospace;font-size:.7rem;color:#a5f3fc;z-index:6;line-height:1.5}
+.scan-telemetry span{color:var(--rose);font-weight:700}
+
+/* ============================================================
+   SCENE 3: DYNO TEST & POWERTRAIN BENCH
+   ============================================================ */
+.dyno-split{display:grid;grid-template-columns:1.2fr 1fr;gap:3vw;align-items:center;width:100%;max-width:1220px;padding:0 5vw}
+.dyno-graph-wrap{position:relative;background:#0c0e14;border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:18px;box-shadow:0 30px 80px rgba(0,0,0,.7)}
+#dynoCanvas{width:100%;height:240px;display:block}
+.dyno-readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.dyno-pill{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 6px;text-align:center}
+.dyno-pill small{font-size:.62rem;color:var(--muted);text-transform:uppercase;font-weight:700}
+.dyno-pill b{display:block;font-size:1.2rem;font-weight:900;margin-top:2px}
+.shift-lights{display:flex;gap:5px;justify-content:center;margin-bottom:10px}
+.s-light{width:20px;height:9px;border-radius:3px;background:#1e2029}
+.s-light.green{background:#10b981;box-shadow:0 0 10px #10b981}
+.s-light.amber{background:#fbbf24;box-shadow:0 0 10px #fbbf24}
+.s-light.red{background:#f43f5e;box-shadow:0 0 12px #f43f5e}
+.s-light.flash{animation:blinkLight .15s infinite}
+@keyframes blinkLight{50%{opacity:.2}}
+
+/* ============================================================
+   SCENE 4: VIRTUAL COCKPIT / DIGITAL CLUSTER STATS
+   ============================================================ */
+.cockpit{width:100%;max-width:1200px;padding:0 5vw}
+.cluster-frame{background:radial-gradient(ellipse at 50% 50%,#151824,#0a0b10 80%);border:2px solid rgba(255,255,255,.14);border-radius:28px;padding:26px;box-shadow:0 40px 120px rgba(0,0,0,.9);position:relative}
+.cluster-top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:14px;margin-bottom:22px}
+.mode-manettino{display:flex;gap:6px}
+.m-pill{font-size:.7rem;font-weight:800;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--muted);cursor:pointer;transition:.2s}
+.m-pill.active{background:var(--rose);color:#fff;box-shadow:0 0 14px var(--rose)}
+.gauges-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.gauge-dial{background:radial-gradient(circle at 50% 50%,#1b1f2e,#0d0f17 70%);border:2px solid rgba(255,255,255,.12);border-radius:20px;padding:20px 14px;text-align:center;position:relative;overflow:hidden}
+.gauge-dial .metric-num{font-size:clamp(2.2rem,3.8vw,3.4rem);font-weight:900;letter-spacing:-.03em;color:#fff;line-height:1}
+.gauge-dial p{font-size:.78rem;font-weight:700;color:var(--muted);margin-top:6px}
+.gauge-radial-bar{position:absolute;inset:4px;border-radius:16px;border:2px solid transparent;border-top-color:var(--cyan);pointer-events:none}
+
+/* ============================================================
+   SCENE 5: LICENSE PLATE DECODER (UK / ES / GULF)
+   ============================================================ */
+.plate-bay{width:100%;max-width:1150px;padding:0 5vw}
+.plate-viewport{display:grid;grid-template-columns:1fr 1.15fr;gap:2.5vw;align-items:center}
+.real-plate-box{position:relative;border-radius:20px;padding:22px;background:#0d0f18;border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 80px rgba(0,0,0,.7);display:flex;flex-direction:column;align-items:center;gap:14px}
+.uk-yellow-plate{width:100%;max-width:360px;height:76px;background:#facc15;border-radius:10px;border:3px solid #000;display:flex;align-items:center;justify-content:space-between;padding:0 16px;box-shadow:0 12px 30px rgba(0,0,0,.5);font-family:"Charles Wright",Impact,sans-serif;font-weight:900;color:#000;font-size:2.3rem;letter-spacing:3px}
+.uk-flag-strip{width:26px;height:100%;background:#1d4ed8;margin-left:-16px;border-radius:6px 0 0 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:.62rem;font-weight:800;gap:2px}
+.plate-laser-line{position:absolute;left:16px;right:16px;height:2px;background:var(--rose);box-shadow:0 0 16px var(--rose);z-index:10}
+.plate-matrix{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;width:100%;max-width:360px}
+.matrix-cell{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:5px 0;text-align:center;font-family:Consolas,monospace;font-size:.74rem;color:#93c5fd}
+.plate-details-card{background:linear-gradient(165deg,#161a29,#0e101b);border:1px solid rgba(255,255,255,.16);border-radius:20px;padding:20px}
+.official-badge-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.seal-badge{font-size:.7rem;font-weight:800;padding:3px 8px;border-radius:6px;background:rgba(16,185,129,.15);border:1px solid var(--green);color:var(--green);display:flex;align-items:center;gap:4px}
+
+/* ============================================================
+   SCENE 6: 3D CARDEX COLLECTOR'S ALBUM
+   ============================================================ */
+.album-stage{position:relative;width:min(1150px,92vw);height:min(540px,68dvh);perspective:1600px;display:flex;align-items:center;justify-content:center}
+.album-book{position:relative;width:min(880px,88vw);height:min(460px,56dvh);transform-style:preserve-3d;border-radius:22px;background:#111420;border:2px solid rgba(255,255,255,.18);box-shadow:0 40px 120px rgba(0,0,0,.85);display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
+.album-spine{position:absolute;left:50%;top:0;bottom:0;width:6px;background:linear-gradient(90deg,#0a0c14,#2d3248 50%,#0a0c14);transform:translateX(-50%);z-index:20}
+.album-page{padding:22px;position:relative;background:radial-gradient(ellipse at 50% 30%,#191e30,#0d0f19 80%)}
+.album-page-title{font-size:.8rem;font-weight:800;color:var(--cyan);text-transform:uppercase;letter-spacing:.12em;display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:8px;margin-bottom:14px}
+.album-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.album-slot{height:140px;border-radius:12px;border:2px dashed rgba(255,255,255,.14);background:rgba(255,255,255,.02);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:.3s}
+.album-slot.filled{border-style:solid;border-color:var(--cyan);background:linear-gradient(135deg,#1a2638,#0f1624);box-shadow:0 10px 25px rgba(34,211,238,.2)}
+.album-slot .slot-num{position:absolute;top:6px;left:6px;font-size:.62rem;font-weight:800;color:var(--muted)}
+.album-slot .slot-title{font-size:.74rem;font-weight:800;margin-top:5px;text-align:center;padding:0 4px}
+.album-slot .slot-sub{font-size:.62rem;color:var(--cyan)}
+.progress-ring-box{position:absolute;bottom:16px;left:22px;right:22px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;font-size:.72rem;font-weight:700}
+.mobile-album-tabs{display:none;gap:6px;margin-bottom:10px}
+.m-album-tab{padding:5px 12px;border-radius:8px;background:rgba(255,255,255,.06);font-size:.74rem;font-weight:800;color:var(--muted);cursor:pointer}
+.m-album-tab.active{background:var(--cyan);color:#000}
+
+/* ============================================================
+   SCENE 7: MARVEL SNAP 3D FOIL WORKSHOP
+   ============================================================ */
+.foil-workshop{display:grid;grid-template-columns:1fr 330px 1.1fr;gap:3vw;align-items:center;width:100%;max-width:1220px;padding:0 5vw}
+.card-3d-wrap{width:320px;height:450px;perspective:1300px;margin:0 auto;-webkit-user-select:none;user-select:none}
+.card-snap{position:relative;width:100%;height:100%;border-radius:22px;transform-style:preserve-3d;will-change:transform;cursor:grab;transition:box-shadow .3s;-webkit-touch-callout:none}
+.card-snap:active{cursor:grabbing}
+.snap-frame{position:absolute;inset:0;border-radius:22px;padding:11px;background:linear-gradient(135deg,#0284c7,#38bdf8 45%,#8b5cf6 85%);transform-style:preserve-3d;overflow:hidden}
+.snap-frame::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--foilX,50%) var(--foilY,50%),rgba(255,255,255,.9),transparent 55%);opacity:.5;mix-blend-mode:overlay;pointer-events:none}
+.snap-inner{position:relative;width:100%;height:100%;border-radius:15px;background:#090d18;overflow:hidden;border:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;justify-content:space-between}
+.snap-car-pop{position:absolute;left:50%;bottom:75px;transform:translateX(-50%) translateZ(40px);width:115%;max-width:none;filter:drop-shadow(0 25px 25px rgba(0,0,0,.9));transition:transform .1s ease-out}
+.snap-badge{position:absolute;top:10px;left:10px;font-size:.65rem;font-weight:900;padding:4px 8px;border-radius:7px;background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.2);color:#fff;transform:translateZ(25px)}
+.snap-pts{position:absolute;top:10px;right:10px;font-size:.72rem;font-weight:900;padding:4px 8px;border-radius:7px;background:linear-gradient(90deg,var(--gold),#d97706);color:#000;transform:translateZ(25px);box-shadow:0 0 15px rgba(245,158,11,.6)}
+.snap-footer{padding:12px;background:linear-gradient(180deg,transparent,rgba(9,13,24,.95) 40%);transform:translateZ(20px)}
+.foil-selectors{display:flex;flex-direction:column;gap:9px}
+.foil-btn{padding:11px 14px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#d1d5db;font-weight:800;font-size:.82rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:.2s}
+.foil-btn:hover,.foil-btn.active{background:rgba(34,211,238,.14);border-color:var(--cyan);color:#fff;box-shadow:0 0 20px rgba(34,211,238,.2)}
+
+/* ============================================================
+   SCENE 8: ANTI-CHEAT FORENSIC MAGNIFIER
+   ============================================================ */
+.forensic-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;width:100%;max-width:1180px;padding:0 5vw}
+.forensic-card{background:linear-gradient(165deg,#151825,#0b0d14);border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:22px;position:relative;overflow:hidden}
+.forensic-icon{font-size:2.2rem;margin-bottom:10px}
+.forensic-card h3{font-size:1.1rem;font-weight:800;margin-bottom:6px}
+.forensic-card p{font-size:.88rem;color:var(--muted);line-height:1.5}
+.lens-view{height:100px;background:#05070c;border:1px solid rgba(255,255,255,.1);border-radius:12px;margin-top:14px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.pixel-stripes{position:absolute;inset:0;background:repeating-linear-gradient(90deg,#ff0000 0 2px,#00ff00 2px 4px,#0000ff 4px 6px,transparent 6px 12px);opacity:.35}
+.lens-crosshair{width:32px;height:32px;border:1.5px solid var(--rose);border-radius:50%;position:relative}
+
+/* ============================================================
+   SCENE 9: OBD-II WORKSHOP DIAGNOSTIC (BUGS RESUELTOS)
+   ============================================================ */
+.obd-wrap{width:100%;max-width:1160px;padding:0 5vw}
+.obd-terminal{background:#090b12;border:2px solid #272d42;border-radius:22px;box-shadow:0 35px 90px rgba(0,0,0,.85);overflow:hidden}
+.obd-header{background:#141724;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #272d42;font-size:.76rem;font-weight:800}
+.obd-body{padding:20px;display:grid;grid-template-columns:1.2fr 1fr;gap:20px}
+.dtc-list{display:flex;flex-direction:column;gap:8px}
+.dtc-item{padding:10px 12px;border-radius:11px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:.2s}
+.dtc-item:hover,.dtc-item.active{background:rgba(244,63,94,.1);border-color:var(--rose)}
+.dtc-code{font-family:Consolas,monospace;font-size:.78rem;font-weight:800;color:var(--rose)}
+.dtc-desc{font-size:.78rem;font-weight:700;color:#e2e8f0;margin-top:2px}
+.dtc-detail{background:#0d101a;border:1px solid #272d42;border-radius:15px;padding:18px;display:flex;flex-direction:column;justify-content:space-between}
+.status-pill-ok{display:inline-block;padding:3px 9px;border-radius:6px;background:rgba(16,185,129,.15);border:1px solid var(--green);color:var(--green);font-size:.7rem;font-weight:800;margin-bottom:10px}
+
+/* ============================================================
+   SCENE 10: LAUNCH CONTROL TERMINAL
+   ============================================================ */
+.launch-wrap{width:100%;max-width:1080px;padding:0 5vw}
+.launch-hud{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+.tree-lights{display:flex;flex-direction:column;gap:9px;background:#10131d;border:2px solid #262c40;border-radius:18px;padding:20px;align-items:center;width:110px;margin:0 auto}
+.tree-bulb{width:40px;height:40px;border-radius:50%;background:#1b2030;transition:.2s}
+.tree-bulb.yellow.lit{background:#fbbf24;box-shadow:0 0 25px #fbbf24}
+.tree-bulb.green.lit{background:#10b981;box-shadow:0 0 30px #10b981}
+.console-box{background:#080a10;border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:20px;font-family:Consolas,monospace;font-size:.85rem;line-height:1.65}
+
+/* ============================================================
+   RESPONSIVE DESIGN FOR SMARTPHONES & TABLETS
+   ============================================================ */
+@media (max-width:900px){
+  #dots{display:none}
+  .head-top{top:calc(48px + 1vh);padding:0 4vw}
+  
+  /* Scene 1: Hero mobile */
+  .hero-text{left:5vw;right:5vw;top:12vh;transform:none;max-width:none;text-align:center}
+  .hero-text .tags{justify-content:center}
+  .hero-telemetry{display:none}
+  .mobile-telem-strip{display:flex}
+  .scroll-cue{bottom:14px}
+
+  /* Scene 2: Scanner mobile */
+  .scanner-stage{width:94vw;height:min(440px,58dvh);margin-top:4vh}
+  .car-silhouette-mock{width:95%}
+  .scan-telemetry{font-size:.62rem;left:10px;top:10px}
+  .bbox .tag-ai{font-size:.56rem;padding:2px 5px}
+
+  /* Scene 3: Dyno mobile */
+  .dyno-split{grid-template-columns:1fr;gap:12px;padding:0 4vw;margin-top:4vh}
+  .dyno-graph-wrap{padding:12px}
+  #dynoCanvas{height:160px}
+  .dyno-readouts{gap:6px;margin-top:10px}
+  .dyno-pill b{font-size:1.05rem}
+  .dyno-split>div:last-child h2{display:none}
+  .dyno-split>div:last-child .lead{display:none}
+  .dyno-split>div:last-child .card{margin-top:0;padding:10px}
+
+  /* Scene 4: Cockpit mobile */
+  .cockpit{padding:0 4vw;margin-top:2vh}
+  .cluster-frame{padding:14px 10px;border-radius:20px}
+  .cluster-top{padding-bottom:10px;margin-bottom:14px}
+  .gauges-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .gauge-dial{padding:14px 8px;border-radius:14px}
+  .gauge-dial .metric-num{font-size:clamp(1.7rem,6vw,2.2rem)}
+
+  /* Scene 5: Plate mobile */
+  .plate-bay{padding:0 4vw;margin-top:3vh}
+  .plate-viewport{grid-template-columns:1fr;gap:12px}
+  .real-plate-box{padding:14px;gap:10px}
+  .uk-yellow-plate{height:58px;font-size:1.75rem;letter-spacing:2px;padding:0 10px}
+  .uk-flag-strip{margin-left:-10px;width:22px;font-size:.55rem}
+  .matrix-cell{font-size:.68rem;padding:4px 0}
+  .plate-details-card{padding:14px}
+  .plate-details-card h3{font-size:1.15rem}
+
+  /* Scene 6: Album mobile */
+  .mobile-album-tabs{display:flex}
+  .album-stage{width:94vw;height:min(440px,60dvh);margin-top:3vh}
+  .album-book{grid-template-columns:1fr;width:94vw;height:100%}
+  .album-spine{display:none}
+  .album-page{padding:14px}
+  .album-page.p-porsche{display:none}
+  .album-slot{height:110px}
+  .album-slot .slot-title{font-size:.68rem}
+  .progress-ring-box{bottom:10px;left:14px;right:14px;padding:5px 10px}
+
+  /* Scene 7: Foil Lab mobile */
+  .foil-workshop{grid-template-columns:1fr;gap:10px;padding:0 4vw;margin-top:3vh}
+  .foil-workshop>div:first-child{display:none}
+  .card-3d-wrap{width:245px;height:345px}
+  .snap-car-pop{bottom:55px}
+  .foil-selectors{
+    flex-direction:row;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    gap:6px;
+    padding:6px 0;
+    width:100%;
+  }
+  .foil-btn{flex:0 0 auto;padding:7px 10px;font-size:.74rem;border-radius:8px}
+
+  /* Scene 8: Forensic mobile */
+  .forensic-grid{grid-template-columns:1fr;gap:10px;padding:0 4vw;margin-top:3vh}
+  .forensic-card{padding:14px}
+  .forensic-icon{font-size:1.6rem;margin-bottom:4px}
+  .lens-view{height:70px;margin-top:8px}
+  .forensic-card:nth-child(n+3){display:none} /* Show top 2 on small screens to fit */
+
+  /* Scene 9: OBD-II mobile */
+  .obd-wrap{padding:0 4vw;margin-top:2vh}
+  .obd-body{grid-template-columns:1fr;gap:12px;padding:12px}
+  .dtc-list{
+    flex-direction:row;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    gap:6px;
+    padding-bottom:6px;
+  }
+  .dtc-item{flex:0 0 auto;width:240px;padding:8px 10px}
+  .dtc-detail{padding:14px}
+
+  /* Scene 10: Launch mobile */
+  .launch-wrap{padding:0 4vw;margin-top:3vh}
+  .launch-hud{grid-template-columns:1fr;gap:14px}
+  .tree-lights{flex-direction:row;width:auto;padding:10px 16px;gap:12px}
+  .tree-bulb{width:32px;height:32px}
+  .console-box{font-size:.76rem;padding:14px}
+}
+</style>
+</head>
+<body>
+
+<header id="topnav">
+  <b>🏎️ MIS COCHES · CARDEX ENGINE</b>
+  <div class="gyro-pill" id="gyroToggle" title="Activar Giroscopio">
+    <div class="gyro-dot"></div>
+    <span id="gyroText">Giroscopio 3D</span>
+  </div>
+</header>
+<div id="bar"></div>
+<nav id="dots"></nav>
+
+<!-- ================= 1 · DIGITAL WIND TUNNEL HERO ================= -->
+<section class="scene" id="s-hero" data-len="260" data-title="Túnel de Viento">
+  <div class="sticky">
+    <canvas id="windCanvas"></canvas>
+    <div class="hero-text" id="heroText">
+      <div class="kicker">Ingeniería & Visión Artificial · 2026</div>
+      <h1>Cómo creamos el Shazam del <span class="grad">Automovilismo</span>.</h1>
+      <p class="lead" style="margin-top:1rem">De una foto en la calle al reconocimiento del chasis, motor, potencia real, historial oficial del gobierno y cartas 3D con giroscopio.</p>
+      <div class="tags">
+        <span class="hero-tag">Next.js 14 Edge</span>
+        <span class="hero-tag">Gemini 2.5 Vision</span>
+        <span class="hero-tag">UK DVLA / MOT</span>
+        <span class="hero-tag">DGT España</span>
+        <span class="hero-tag">3D Gyro Foils</span>
+      </div>
+    </div>
+    <div class="hero-telemetry" id="heroTelem">
+      <div class="telem-box">
+        <small>Velocidad del Flujo</small>
+        <div class="val" id="telemSpeed">318<span class="unit">KM/H</span></div>
+        <div class="telem-bar"><i id="speedBar" style="width:82%"></i></div>
+      </div>
+      <div class="telem-box">
+        <small>Carga Aerodinámica (Downforce)</small>
+        <div class="val" id="telemAero">485<span class="unit">KG</span></div>
+        <div class="telem-bar"><i id="aeroBar" style="width:68%;background:linear-gradient(90deg,#06b6d4,#10b981)"></i></div>
+      </div>
+    </div>
+    
+    <!-- Mobile floating telemetry bar -->
+    <div class="mobile-telem-strip" id="mTelemStrip">
+      <div>
+        <span class="m-lbl">VELOCIDAD FLUJO</span>
+        <span class="m-val" id="mSpeedVal">318 KM/H</span>
+      </div>
+      <div style="text-align:right">
+        <span class="m-lbl">CARGA AERODINÁMICA</span>
+        <span class="m-val" id="mAeroVal" style="color:#10b981">485 KG</span>
+      </div>
+    </div>
+
+    <div class="scroll-cue" id="cue"><div class="mouse"></div>Desliza para acelerar</div>
+  </div>
+</section>
+
+<!-- ================= 2 · COMPUTER VISION SCANNER ================= -->
+<section class="scene" id="s-scan" data-len="380" data-title="Escáner Visión">
+  <div class="sticky col">
+    <div class="head-top">
+      <div class="kicker">01 · Visión por Computador</div>
+      <h2>Detección geométrica y <span class="grad">segmentación</span>.</h2>
+    </div>
+    <div class="scanner-stage" id="scannerStage">
+      <div class="scanner-grid"></div>
+      <div class="laser-beam" id="laserBeam"></div>
+      <div class="hud-corner hud-tl"></div><div class="hud-corner hud-tr"></div>
+      <div class="hud-corner hud-bl"></div><div class="hud-corner hud-br"></div>
+      
+      <div class="scan-telemetry">
+        MODEL: <span>GEMINI-FLASH</span><br>
+        RESOLUTION: <span>1920x1080</span><br>
+        CONFIDENCE: <span id="confVal">99.4% HIGH</span><br>
+        INFERENCE: <span>1.42s EDGE</span>
+      </div>
+
+      <!-- Vector Supercar Mock under scanner -->
+      <div class="car-silhouette-mock">
+        <svg viewBox="0 0 680 240" width="100%" height="auto">
+          <defs>
+            <linearGradient id="carBody" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#334155"/><stop offset="50%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></linearGradient>
+            <linearGradient id="laserGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#f43f5e"/></linearGradient>
+          </defs>
+          <path d="M70 70 L25 15 L110 20 L95 72 Z" fill="#0f172a" stroke="#f43f5e" stroke-width="2.5"/>
+          <path d="M20 14 L125 18 L120 28 L15 24 Z" fill="#f43f5e"/>
+          <path d="M45 140 C 60 90, 110 75, 175 68 L 290 56 C 360 56, 440 75, 530 115 L 610 138 C 630 145, 638 165, 620 180 L 590 185 C 580 155, 545 145, 515 145 C 485 145, 450 162, 445 185 L 235 185 C 230 158, 195 145, 165 145 C 135 145, 100 160, 95 185 L 35 185 C 20 180, 25 155, 45 140 Z" fill="url(#carBody)" stroke="url(#laserGrad)" stroke-width="2.5"/>
+          <path d="M190 76 L 285 66 L 380 76 L 435 110 L 265 110 Z" fill="#0ea5e9" opacity=".35"/>
+          <circle cx="165" cy="185" r="38" fill="#09090b" stroke="#f43f5e" stroke-width="3"/>
+          <circle cx="165" cy="185" r="22" fill="#18181b" stroke="#64748b" stroke-width="2"/>
+          <circle cx="515" cy="185" r="38" fill="#09090b" stroke="#f43f5e" stroke-width="3"/>
+          <circle cx="515" cy="185" r="22" fill="#18181b" stroke="#64748b" stroke-width="2"/>
+          <circle cx="36" cy="172" r="4.5" fill="#f43f5e"/>
+          <circle cx="26" cy="172" r="3.5" fill="#e2e8f0"/>
+          <circle cx="46" cy="172" r="3.5" fill="#e2e8f0"/>
+        </svg>
+
+        <div class="bbox bbox-car"><div class="tag-ai">🎯 CIVIC TYPE R (FK8) · 99.4%</div></div>
+        <div class="bbox bbox-plate"><div class="tag-ai">🔤 FK08 BAD · UK</div></div>
+        <div class="bbox bbox-wing"><div class="tag-ai">⚡ ALERÓN GT OEM</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3 · DYNO TEST BENCH ================= -->
+<section class="scene" id="s-dyno" data-len="380" data-title="Banco de Potencia">
+  <div class="sticky">
+    <div class="dyno-split">
+      <div class="dyno-graph-wrap">
+        <div class="shift-lights">
+          <div class="s-light green"></div><div class="s-light green"></div>
+          <div class="s-light amber"></div><div class="s-light amber"></div>
+          <div class="s-light red"></div><div class="s-light red flash"></div>
+        </div>
+        <canvas id="dynoCanvas"></canvas>
+        <div class="dyno-readouts">
+          <div class="dyno-pill"><small>Potencia</small><b style="color:#22d3ee" id="dynoHp">320 CV</b></div>
+          <div class="dyno-pill"><small>Par Motor</small><b style="color:#fbbf24" id="dynoTorque">400 Nm</b></div>
+          <div class="dyno-pill"><small>Giro</small><b style="color:#f43f5e" id="dynoRpm">8,200 RPM</b></div>
+        </div>
+      </div>
+      <div>
+        <div class="kicker">02 · Rendimiento de Motor</div>
+        <h2>Curvas reales de potencia y <span class="grad-fire">telemetría</span>.</h2>
+        <p class="lead" style="margin-top:1rem">A partir del chasis y motor extraídos por la IA, el motor calcula el diagrama dinámico de par y potencia según el mapeado oficial del fabricante.</p>
+        <div style="margin-top:1.4rem" class="card">
+          <div style="font-size:.8rem;font-weight:800;color:var(--cyan);margin-bottom:4px">MOTORIZACIÓN VERIFICADA:</div>
+          <div style="font-size:1.05rem;font-weight:900">2.0L VTEC TURBO (K20C1)</div>
+          <div style="font-size:.8rem;color:var(--muted);margin-top:2px">Inyección directa · Turbo mono-scroll · VTEC escape</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4 · VIRTUAL COCKPIT STATS ================= -->
+<section class="scene" id="s-cluster" data-len="360" data-title="Cuadro Digital">
+  <div class="sticky col">
+    <div class="cockpit">
+      <div class="cluster-frame">
+        <div class="cluster-top">
+          <div style="font-weight:900;font-size:1rem;letter-spacing:-.02em;color:#fff">VIRTUAL COCKPIT // REPOSITORIO & REGLAJES</div>
+          <div class="mode-manettino">
+            <div class="m-pill active" data-m="track">+R TRACK</div>
+            <div class="m-pill" data-m="sport">SPORT</div>
+            <div class="m-pill" data-m="comfort">COMFORT</div>
+          </div>
+        </div>
+        <div class="gauges-grid">
+          <div class="gauge-dial">
+            <div class="gauge-radial-bar"></div>
+            <div class="metric-num" data-val="15784">0</div>
+            <p>Líneas de TypeScript</p>
+          </div>
+          <div class="gauge-dial">
+            <div class="gauge-radial-bar" style="border-top-color:var(--rose)"></div>
+            <div class="metric-num" data-val="233">0</div>
+            <p>Coches en Álbum CarDex</p>
+          </div>
+          <div class="gauge-dial">
+            <div class="gauge-radial-bar" style="border-top-color:var(--gold)"></div>
+            <div class="metric-num" data-val="50">0</div>
+            <p>Módulos de Código</p>
+          </div>
+          <div class="gauge-dial">
+            <div class="gauge-radial-bar" style="border-top-color:var(--green)"></div>
+            <div class="metric-num" data-val="0" data-suf=" €">0</div>
+            <p>Coste en APIs de Tráfico</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5 · LICENSE PLATE DECODER ================= -->
+<section class="scene" id="s-plate" data-len="420" data-title="OCR Matrículas">
+  <div class="sticky col">
+    <div class="plate-bay">
+      <div class="head-top" style="position:static;padding:0;margin-bottom:2vh">
+        <div class="kicker">04 · Cruce Gubernamental</div>
+        <h2>Decodificador de matrícula & <span class="grad-gold">Tasación</span>.</h2>
+      </div>
+      <div class="plate-viewport">
+        <div class="real-plate-box">
+          <div class="plate-laser-line" id="plateLaser"></div>
+          <div class="uk-yellow-plate">
+            <div class="uk-flag-strip"><span>🇬🇧</span><span>UK</span></div>
+            <span>FK08 BAD</span>
+          </div>
+          <div class="plate-matrix">
+            <div class="matrix-cell">F<br><small>99%</small></div>
+            <div class="matrix-cell">K<br><small>99%</small></div>
+            <div class="matrix-cell">0<br><small>98%</small></div>
+            <div class="matrix-cell">8<br><small>99%</small></div>
+            <div class="matrix-cell">B<br><small>99%</small></div>
+            <div class="matrix-cell">A<br><small>99%</small></div>
+            <div class="matrix-cell">D<br><small>99%</small></div>
+          </div>
+        </div>
+        <div class="plate-details-card">
+          <div class="official-badge-row">
+            <div class="seal-badge">✓ UK DVLA VERIFIED</div>
+            <div class="seal-badge" style="border-color:var(--gold);color:var(--gold);background:rgba(245,158,11,.15)">💰 MATRÍCULA VALIOSA</div>
+          </div>
+          <h3 style="font-size:1.3rem;font-weight:900">£1,200 — £3,000 GBP</h3>
+          <p style="font-size:.84rem;color:var(--muted);margin-top:4px;line-height:1.5">Matrícula británica dateless personalizada que deletrea una palabra legible (<b>'BAD'</b>). Consultada en bases de subastas DVLA.</p>
+          
+          <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.78rem">
+            <div style="background:rgba(255,255,255,.05);padding:8px 10px;border-radius:8px">
+              <span style="color:var(--muted);display:block;font-size:.65rem">TEST MOT OFICIAL</span>
+              <b style="color:#10b981">VÁLIDO (Mar 2027)</b>
+            </div>
+            <div style="background:rgba(255,255,255,.05);padding:8px 10px;border-radius:8px">
+              <span style="color:var(--muted);display:block;font-size:.65rem">ODÓMETRO REGISTRADO</span>
+              <b style="color:#fff">49,021 Millas</b>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6 · 3D CARDEX COLLECTOR'S ALBUM ================= -->
+<section class="scene" id="s-album" data-len="420" data-title="Álbum CarDex">
+  <div class="sticky col">
+    <div class="head-top">
+      <div class="kicker">05 · Gamificación & Coleccionismo</div>
+      <h2>Álbum CarDex: <span class="grad">35 marcas de leyenda</span>.</h2>
+    </div>
+    
+    <!-- Mobile chapter tabs -->
+    <div class="mobile-album-tabs" id="mAlbumTabs">
+      <div class="m-album-tab active" data-page="honda">🇯🇵 Honda Sport</div>
+      <div class="m-album-tab" data-page="porsche">🇩🇪 Porsche Motorsport</div>
+    </div>
+
+    <div class="album-stage">
+      <div class="album-book" id="albumBook">
+        <div class="album-spine"></div>
+        <!-- Left page: Honda Chapter -->
+        <div class="album-page p-honda" id="pageHonda">
+          <div class="album-page-title">
+            <span>🇯🇵 CAPÍTULO 04: HONDA SPORT</span>
+            <span style="color:#fff">3 / 8 CROMOS</span>
+          </div>
+          <div class="album-grid">
+            <div class="album-slot filled">
+              <span class="slot-num">#28</span>
+              <span style="font-size:1.6rem">🏎️</span>
+              <span class="slot-title">Civic Type R FK8</span>
+              <span class="slot-sub">DESBLOQUEADO</span>
+            </div>
+            <div class="album-slot filled">
+              <span class="slot-num">#29</span>
+              <span style="font-size:1.6rem">🏁</span>
+              <span class="slot-title">NSX Type R (NA1)</span>
+              <span class="slot-sub">DESBLOQUEADO</span>
+            </div>
+            <div class="album-slot filled">
+              <span class="slot-num">#30</span>
+              <span style="font-size:1.6rem">🌪️</span>
+              <span class="slot-title">S2000 AP2 VTEC</span>
+              <span class="slot-sub">DESBLOQUEADO</span>
+            </div>
+            <div class="album-slot">
+              <span class="slot-num">#31</span>
+              <span style="font-size:1.4rem;opacity:.3">🔒</span>
+              <span class="slot-title" style="color:var(--muted)">Integra DC2 Type R</span>
+              <span class="slot-sub" style="color:var(--muted)">POR DESCUBRIR</span>
+            </div>
+          </div>
+          <div class="progress-ring-box">
+            <span>Progreso fabricante:</span>
+            <b style="color:var(--cyan)">37% COMPLETADO</b>
+          </div>
+        </div>
+        <!-- Right page: Porsche Chapter -->
+        <div class="album-page p-porsche" id="pagePorsche">
+          <div class="album-page-title">
+            <span>🇩🇪 CAPÍTULO 12: PORSCHE</span>
+            <span style="color:#fff">2 / 12 CROMOS</span>
+          </div>
+          <div class="album-grid">
+            <div class="album-slot filled" style="border-color:var(--gold);box-shadow:0 10px 25px rgba(245,158,11,.25)">
+              <span class="slot-num">#94</span>
+              <span style="font-size:1.6rem">👑</span>
+              <span class="slot-title">Carrera GT (V10)</span>
+              <span class="slot-sub" style="color:var(--gold)">LEGENDARIO</span>
+            </div>
+            <div class="album-slot filled">
+              <span class="slot-num">#95</span>
+              <span style="font-size:1.6rem">⚡</span>
+              <span class="slot-title">911 GT3 RS (992)</span>
+              <span class="slot-sub">DESBLOQUEADO</span>
+            </div>
+            <div class="album-slot">
+              <span class="slot-num">#96</span>
+              <span style="font-size:1.4rem;opacity:.3">🔒</span>
+              <span class="slot-title" style="color:var(--muted)">911 GT2 RS (991)</span>
+              <span class="slot-sub" style="color:var(--muted)">POR DESCUBRIR</span>
+            </div>
+            <div class="album-slot">
+              <span class="slot-num">#97</span>
+              <span style="font-size:1.4rem;opacity:.3">🔒</span>
+              <span class="slot-title" style="color:var(--muted)">959 Komfort</span>
+              <span class="slot-sub" style="color:var(--muted)">POR DESCUBRIR</span>
+            </div>
+          </div>
+          <div class="progress-ring-box">
+            <span>Progreso fabricante:</span>
+            <b style="color:var(--gold)">16% COMPLETADO</b>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 7 · MARVEL SNAP 3D FOIL WORKSHOP ================= -->
+<section class="scene" id="s-foil" data-len="460" data-title="Laboratorio Foil">
+  <div class="sticky col">
+    <div class="head-top">
+      <div class="kicker">06 · Shaders 3D en Cliente</div>
+      <h2>Cartas con física <span class="grad">giroscópica</span>.</h2>
+    </div>
+    <div class="foil-workshop">
+      <div>
+        <h3>Efecto Frame Split</h3>
+        <p class="lead" style="margin-top:.6rem;font-size:.95rem">El deportivo rompe el marco en 3D. El destello prismático reacciona al giroscopio del móvil o al tacto del dedo en pantalla.</p>
+        <div style="margin-top:1.2rem" class="card">
+          <small style="color:var(--cyan);font-weight:800">REGLA UX FUNDAMENTAL:</small>
+          <p style="font-size:.82rem;margin-top:3px">El foil afecta <b>únicamente al borde exterior</b> para preservar la nitidez original de la foto del vehículo.</p>
+        </div>
+      </div>
+
+      <div class="card-3d-wrap">
+        <div class="card-snap" id="snapCard">
+          <div class="snap-frame" id="snapFrame">
+            <div class="snap-inner">
+              <div class="snap-badge" id="snapBadge">💎 PRISMA ZAFIRO</div>
+              <div class="snap-pts" id="snapPts">+325 PTS</div>
+              <div style="position:relative;height:62%">
+                <div class="snap-car-pop" id="snapCarPop">
+                  <svg viewBox="0 0 320 150" width="100%" height="auto">
+                    <path d="M40 45 L15 15 L60 20 L50 48 Z" fill="#0f172a" stroke="#f43f5e" stroke-width="1.5"/>
+                    <path d="M14 14 L75 18 L70 24 L12 20 Z" fill="#f43f5e"/>
+                    <path d="M22 85 C 32 60, 55 50, 90 45 L 145 38 C 180 38, 220 50, 265 75 L 295 86 C 305 91, 308 102, 298 110 L 285 113 C 280 96, 260 90, 245 90 C 230 90, 212 100, 210 113 L 110 113 C 107 98, 90 90, 75 90 C 60 90, 44 100, 40 113 L 16 113 Z" fill="#1e293b" stroke="#38bdf8" stroke-width="1.8"/>
+                    <circle cx="75" cy="112" r="20" fill="#09090b" stroke="#f43f5e" stroke-width="2"/>
+                    <circle cx="245" cy="112" r="20" fill="#09090b" stroke="#f43f5e" stroke-width="2"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="snap-footer">
+                <div style="font-weight:900;font-size:1.1rem;color:#fff">Honda Civic Type R</div>
+                <div style="font-size:.7rem;color:var(--cyan);font-weight:700">FK8 · 320 CV · VTEC TURBO</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foil-selectors">
+        <button class="foil-btn" data-f="metal"><span>🔘 Metalizado</span><small>+50</small></button>
+        <button class="foil-btn" data-f="esmeralda"><span>🟢 Esmeralda</span><small>+125</small></button>
+        <button class="foil-btn active" data-f="zafiro"><span>💎 Zafiro</span><small>+325</small></button>
+        <button class="foil-btn" data-f="flare"><span>🔮 Flare</span><small>+650</small></button>
+        <button class="foil-btn" data-f="gold"><span>👑 Oro 24K</span><small>+1200</small></button>
+        <button class="foil-btn" data-f="infinity"><span>🌌 Infinity</span><small>+2500</small></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8 · FORENSIC ANTI-CHEAT ================= -->
+<section class="scene" id="s-forensic" data-len="360" data-title="Anti-Trampas">
+  <div class="sticky col">
+    <div class="head-top">
+      <div class="kicker">07 · Detección de Fraude</div>
+      <h2>Inspección forense de <span class="grad-fire">píxeles reales</span>.</h2>
+    </div>
+    <div class="forensic-grid">
+      <div class="forensic-card">
+        <div class="forensic-icon">📺</div>
+        <h3>Detector Moiré</h3>
+        <p>Identifica interferencias de la rejilla RGB de monitores, impidiendo fotografiar pantallas o Google Imágenes.</p>
+        <div class="lens-view"><div class="pixel-stripes"></div><div class="lens-crosshair"></div></div>
+      </div>
+      <div class="forensic-card">
+        <div class="forensic-icon">⏱️</div>
+        <h3>Consistencia EXIF</h3>
+        <p>Comprueba la distancia focal real del sensor del smartphone y que el timestamp coincida con la hora del escaneo.</p>
+        <div class="lens-view"><div style="font-family:Consolas,monospace;font-size:.7rem;color:#6ee7b7">✓ LENS: 26mm f/1.8<br>✓ TIMESTAMP: LIVE OK</div></div>
+      </div>
+      <div class="forensic-card">
+        <div class="forensic-icon">✂️</div>
+        <h3>Status Bar Check</h3>
+        <p>Detecta barras de notificación de iOS / Android y recortes para bloquear capturas tomadas de redes sociales.</p>
+        <div class="lens-view"><div style="font-family:Consolas,monospace;font-size:.7rem;color:#fca5a5">RECORTES DETECTADOS: 0<br>STATUS BAR: RECHAZADO</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 9 · OBD-II WORKSHOP (BUGS RESUELTOS) ================= -->
+<section class="scene" id="s-obd" data-len="420" data-title="Taller OBD-II">
+  <div class="sticky col">
+    <div class="obd-wrap">
+      <div class="head-top" style="position:static;padding:0;margin-bottom:2vh">
+        <div class="kicker">08 · Diagnóstico de Taller</div>
+        <h2>Incidencias de ingeniería, <span class="grad-eco">reparadas</span>.</h2>
+      </div>
+      <div class="obd-terminal">
+        <div class="obd-header">
+          <span>OBD-II DIAGNOSTIC // VERIFIED LOGS</span>
+          <span style="color:#10b981">ALL FAULTS CLEARED (6/6)</span>
+        </div>
+        <div class="obd-body">
+          <div class="dtc-list">
+            <div class="dtc-item active" data-dtc="0">
+              <div>
+                <div class="dtc-code">DTC P001: USE_AUTO_TRANSLATION_LOOP</div>
+                <div class="dtc-desc">Botón "Saving car" congelado por bucle de render</div>
+              </div>
+              <span class="status-pill-ok">RESUELTO</span>
+            </div>
+            <div class="dtc-item" data-dtc="1">
+              <div>
+                <div class="dtc-code">DTC P002: MOT_ODOMETER_HIERARCHY</div>
+                <div class="dtc-desc">Discrepancia entre estimación (30k) y MOT real (49k)</div>
+              </div>
+              <span class="status-pill-ok">RESUELTO</span>
+            </div>
+            <div class="dtc-item" data-dtc="2">
+              <div>
+                <div class="dtc-code">DTC P003: UI_OVERLOAD_ACCORDIONS</div>
+                <div class="dtc-desc">Pantalla saturada con 25 campos técnicos visibles</div>
+              </div>
+              <span class="status-pill-ok">RESUELTO</span>
+            </div>
+            <div class="dtc-item" data-dtc="3">
+              <div>
+                <div class="dtc-code">DTC P004: DEEP_I18N_DESCRIPTIONS</div>
+                <div class="dtc-desc">Campos anidados de producción seguían en español</div>
+              </div>
+              <span class="status-pill-ok">RESUELTO</span>
+            </div>
+            <div class="dtc-item" data-dtc="4">
+              <div>
+                <div class="dtc-code">DTC P005: ARABIC_PLATE_VALUATION</div>
+                <div class="dtc-desc">Tasación para placas especiales de Emiratos y Kuwait</div>
+              </div>
+              <span class="status-pill-ok">RESUELTO</span>
+            </div>
+            <div class="dtc-item" data-dtc="5">
+              <div>
+                <div class="dtc-code">DTC P006: CARDEX_BRAND_TRACKING</div>
+                <div class="dtc-desc">Contador en tiempo real por fabricante deportivo</div>
+              </div>
+              <span class="status-pill-ok">RESUELTO</span>
+            </div>
+          </div>
+          <div class="dtc-detail" id="dtcDetail">
+            <div>
+              <div class="status-pill-ok" id="dtcStatus">DIAGNÓSTICO SUPERADO</div>
+              <h3 id="dtcTitle" style="font-size:1.05rem;font-weight:800;margin-bottom:6px">Bucle de render en traducción</h3>
+              <p id="dtcExplanation" style="font-size:.84rem;color:var(--muted);line-height:1.5">
+                Al pasar un objeto literal en las dependencias de useEffect dentro de <code>useAutoTranslation</code>, React provocaba re-renders infinitos que impedían interactuar con la interfaz al guardar. Se solucionó serializando hashes JSON estables.
+              </p>
+            </div>
+            <div style="background:#07080d;border:1px solid #272d42;border-radius:10px;padding:10px;font-family:Consolas,monospace;font-size:.72rem;color:#7ee787;margin-top:10px" id="dtcFix">
+              ✓ Fix: JSON.stringify(sourceObject) memoized & atomic state updates
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 10 · LAUNCH CONTROL TERMINAL ================= -->
+<section class="scene" id="s-launch" data-len="340" data-title="Salida a Producción">
+  <div class="sticky col">
+    <div class="launch-wrap">
+      <div class="head-top" style="position:static;padding:0;margin-bottom:2vh">
+        <div class="kicker">09 · Despliegue en Red</div>
+        <h2>Launch Control: <span class="grad">0 a 100 en Edge</span>.</h2>
+      </div>
+      <div class="launch-hud">
+        <div class="tree-lights">
+          <div class="tree-bulb yellow lit" id="tb1"></div>
+          <div class="tree-bulb yellow lit" id="tb2"></div>
+          <div class="tree-bulb yellow lit" id="tb3"></div>
+          <div class="tree-bulb green lit" id="tb4"></div>
+        </div>
+        <div class="console-box" id="launchConsole">
+          <span style="color:#8b949e"># 1. Compilación del proyecto</span><br>
+          <span style="color:#7ee787">PS> npm run build</span><br>
+          <span style="color:#79c0ff">✓ Compiled in 6.4s (50 modules checked)</span><br><br>
+          <span style="color:#8b949e"># 2. Despliegue en red mundial Vercel</span><br>
+          <span style="color:#7ee787">PS> vercel --prod</span><br>
+          <span style="color:#f2cc60">🚀 Production Ready: https://app-coches.vercel.app</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 11 · END ================= -->
+<section class="scene" id="s-end" data-len="100" data-title="Fin">
+  <div class="sticky col center" style="text-align:center">
+    <span style="font-size:clamp(3.8rem,8vw,6.5rem);display:inline-block">🏆</span>
+    <h1 style="margin-top:1rem">¡Gracias por la visita!</h1>
+    <p class="lead" style="margin:.8rem auto 0">Desarrollado para transformar cada paseo por la calle en una auténtica cacería de deportivos.</p>
+    <div style="margin-top:1.2rem">
+      <span class="hero-tag">Next.js 14</span><span class="hero-tag">Gemini Vision</span><span class="hero-tag">DVLA</span><span class="hero-tag">CarDex 233</span>
+    </div>
+    <button class="hero-tag" style="margin-top:1.8rem;cursor:pointer;padding:.8rem 1.6rem;background:#fff;color:#000;font-size:.9rem;font-weight:800;border:none" onclick="scrollTo({top:0,behavior:'smooth'})">↑ Volver a la salida</button>
+  </div>
+</section>
+
+<script>
+/* ============================================================
+   ENGINE & TOUCH / GYROSCOPE SYSTEM
+   ============================================================ */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a=0,b=1)=>v<a?a:v>b?b:v;
+const seg=(p,a,b)=>clamp((p-a)/(b-a));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const eOut=t=>1-Math.pow(1-t,3);
+const eIO=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+let W=innerWidth,H=innerHeight,mobile=W<900;
+const updaters={}, onResize=[];
+let mx=0,my=0,mxs=0,mys=0,sy=scrollY;
+
+// Mouse & Touch Tracking
+addEventListener('mousemove',e=>{mx=e.clientX/W*2-1;my=e.clientY/H*2-1});
+addEventListener('touchstart',e=>{
+  if(e.touches.length>0){
+    mx=e.touches[0].clientX/W*2-1;
+    my=e.touches[0].clientY/H*2-1;
+  }
+},{passive:true});
+addEventListener('touchmove',e=>{
+  if(e.touches.length>0){
+    mx=e.touches[0].clientX/W*2-1;
+    my=e.touches[0].clientY/H*2-1;
+  }
+},{passive:true});
+
+// Gyroscope tracking (phone tilt)
+let gyroGranted=false;
+function bindOrientation(){
+  window.addEventListener('deviceorientation',e=>{
+    if(e.gamma!=null && e.beta!=null){
+      gyroGranted=true;
+      // Gamma: left-to-right [-90, 90], Beta: front-to-back [-180, 180]
+      const gx=clamp(e.gamma/35,-1,1);
+      const gy=clamp((e.beta-45)/35,-1,1);
+      mxs+=(gx-mxs)*0.15;
+      mys+=(gy-mys)*0.15;
+
+      // Update 3D foil shine and tilt on mobile
+      const snapCard=$('#snapCard'), snapFrame=$('#snapFrame');
+      if(snapCard && snapFrame){
+        snapCard.style.transform=`rotateY(${gx*22}deg) rotateX(${-gy*18}deg)`;
+        snapFrame.style.setProperty('--foilX',`${(gx+1)*50}%`);
+        snapFrame.style.setProperty('--foilY',`${(gy+1)*50}%`);
+      }
+    }
+  });
+}
+
+function initGyroscope(){
+  if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+    DeviceOrientationEvent.requestPermission().then(st=>{
+      if(st==='granted'){
+        bindOrientation();
+        $('#gyroText').textContent='Giroscopio Activo ✓';
+      }
+    }).catch(console.error);
+  } else if(window.DeviceOrientationEvent){
+    bindOrientation();
+    $('#gyroText').textContent='Giroscopio Activo ✓';
+  }
+}
+$('#gyroToggle').onclick=()=>initGyroscope();
+// Auto-init on mobile if permission not required
+if(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission!=='function'){
+  bindOrientation();
+}
+
+const sceneEls=$$('.scene');
+sceneEls.forEach(s=>s.style.height=(+s.dataset.len||100)+'vh');
+
+/* Dots navigation */
+const dotsNav=$('#dots');
+sceneEls.forEach(s=>{
+  const a=document.createElement('a');
+  a.innerHTML=`<span>${s.dataset.title}</span>`;
+  a.onclick=()=>scrollTo({top:s.offsetTop+(s.id==='s-hero'?0:2),behavior:'smooth'});
+  dotsNav.appendChild(a);
+});
+const dots=$$('#dots a');
+
+/* ============================================================
+   1 · DIGITAL WIND TUNNEL HERO
+   ============================================================ */
+const wcv=$('#windCanvas'),wctx=wcv.getContext('2d');
+let windDpr=1,windParticles=[];
+
+function resetParticles(){
+  const count=mobile?90:170;
+  windParticles=[];
+  for(let i=0;i<count;i++){
+    windParticles.push({
+      x:Math.random(),
+      y:0.15+Math.random()*0.7,
+      vx:0.008+Math.random()*0.014,
+      len:20+Math.random()*40,
+      hue:Math.random()>0.3?190:350
+    });
+  }
+}
+
+onResize.push(()=>{
+  windDpr=Math.min(window.devicePixelRatio||1,1.5);
+  wcv.width=W*windDpr;
+  wcv.height=H*windDpr;
+  resetParticles();
+});
+
+function drawWindTunnel(p,t){
+  const w=wcv.width,h=wcv.height;
+  wctx.clearRect(0,0,w,h);
+  
+  // Background cyber grid
+  wctx.strokeStyle='rgba(255,255,255,0.03)';
+  wctx.lineWidth=1;
+  const step=(mobile?32:44)*windDpr;
+  for(let x=0;x<w;x+=step){wctx.beginPath();wctx.moveTo(x,0);wctx.lineTo(x,h);wctx.stroke()}
+  for(let y=0;y<h;y+=step){wctx.beginPath();wctx.moveTo(0,y);wctx.lineTo(w,y);wctx.stroke()}
+
+  const speedMult=lerp(1,3.2,eIO(p));
+  const cx=w*(mobile?0.5:0.42), cy=h*(mobile?0.58:0.52);
+  const carLen=Math.min(w,h)*(mobile?0.65:0.55);
+
+  for(const pt of windParticles){
+    pt.x+=pt.vx*speedMult;
+    if(pt.x>1.2){pt.x=-0.2;pt.y=0.15+Math.random()*0.7}
+
+    const px=pt.x*w;
+    let py=pt.y*h;
+
+    const dx=(px-cx)/carLen;
+    if(dx>-0.6 && dx<0.6){
+      const bump=Math.cos(dx*Math.PI*0.85);
+      if(py>cy-carLen*0.25 && py<cy+carLen*0.1){
+        py-=bump*(mobile?32:45)*windDpr;
+      }
+    }
+
+    const pLen=pt.len*windDpr*speedMult;
+    const grad=wctx.createLinearGradient(px-pLen,py,px,py);
+    grad.addColorStop(0,`rgba(${pt.hue===190?'34,211,238':'244,63,94'},0)`);
+    grad.addColorStop(1,`rgba(${pt.hue===190?'34,211,238':'244,63,94'},0.75)`);
+
+    wctx.strokeStyle=grad;
+    wctx.lineWidth=(pt.hue===190?1.5:2.2)*windDpr;
+    wctx.beginPath();
+    wctx.moveTo(px-pLen,py);
+    wctx.lineTo(px,py);
+    wctx.stroke();
+  }
+}
+
+const telemSpeed=$('#telemSpeed'),speedBar=$('#speedBar'),telemAero=$('#telemAero'),heroText=$('#heroText'),heroTelem=$('#heroTelem');
+const mSpeedVal=$('#mSpeedVal'),mAeroVal=$('#mAeroVal'),mTelemStrip=$('#mTelemStrip');
+updaters['s-hero']=(p,t)=>{
+  drawWindTunnel(p,t);
+  const curSpd=Math.round(lerp(120,340,eOut(p)));
+  telemSpeed.innerHTML=`${curSpd}<span class="unit">KM/H</span>`;
+  mSpeedVal.textContent=`${curSpd} KM/H`;
+  speedBar.style.width=`${(curSpd/340)*100}%`;
+  const curAero=Math.round(lerp(180,540,eOut(p)));
+  telemAero.innerHTML=`${curAero}<span class="unit">KG</span>`;
+  mAeroVal.textContent=`${curAero} KG`;
+
+  const o=1-seg(p,0.05,0.35);
+  heroText.style.opacity=o;
+  heroTelem.style.opacity=o;
+  if(mTelemStrip) mTelemStrip.style.opacity=o;
+};
+
+/* ============================================================
+   2 · COMPUTER VISION SCANNER
+   ============================================================ */
+const laserBeam=$('#laserBeam'),bboxCar=$('.bbox-car'),bboxPlate=$('.bbox-plate'),bboxWing=$('.bbox-wing');
+updaters['s-scan']=p=>{
+  const beamY=p*100;
+  laserBeam.style.top=`${beamY}%`;
+  bboxCar.style.opacity=seg(p,0.1,0.25);
+  bboxPlate.style.opacity=seg(p,0.3,0.45);
+  bboxWing.style.opacity=seg(p,0.5,0.65);
+};
+
+/* ============================================================
+   3 · DYNO TEST BENCH
+   ============================================================ */
+const dcv=$('#dynoCanvas'),dctx=dcv.getContext('2d');
+const dynoHp=$('#dynoHp'),dynoTorque=$('#dynoTorque'),dynoRpm=$('#dynoRpm');
+
+function drawDynoCurve(p){
+  const w=dcv.clientWidth, h=dcv.clientHeight;
+  dcv.width=w*windDpr; dcv.height=h*windDpr;
+  dctx.clearRect(0,0,dcv.width,dcv.height);
+  const dw=dcv.width, dh=dcv.height;
+
+  dctx.strokeStyle='rgba(255,255,255,0.06)';
+  dctx.lineWidth=1;
+  for(let x=30;x<dw;x+=50){dctx.beginPath();dctx.moveTo(x,0);dctx.lineTo(x,dh-25);dctx.stroke()}
+  for(let y=15;y<dh-25;y+=35){dctx.beginPath();dctx.moveTo(30,y);dctx.lineTo(dw,y);dctx.stroke()}
+
+  const prog=clamp(p*1.3);
+
+  // Power curve (Cyan)
+  dctx.strokeStyle='#22d3ee';
+  dctx.lineWidth=(mobile?2.2:3)*windDpr;
+  dctx.beginPath();
+  const maxIdx=Math.floor(prog*50);
+  for(let i=0;i<=maxIdx;i++){
+    const u=i/50;
+    const x=30+u*(dw-40);
+    const hp=Math.sin(u*Math.PI*0.7)*0.85;
+    const y=(dh-30)-hp*(dh-50);
+    if(i===0) dctx.moveTo(x,y); else dctx.lineTo(x,y);
+  }
+  dctx.stroke();
+
+  // Torque curve (Amber)
+  dctx.strokeStyle='#fbbf24';
+  dctx.lineWidth=(mobile?1.8:2.5)*windDpr;
+  dctx.beginPath();
+  for(let i=0;i<=maxIdx;i++){
+    const u=i/50;
+    const x=30+u*(dw-40);
+    const tq=Math.sin(Math.min(1,u*1.8)*Math.PI*0.5)*0.88;
+    const y=(dh-30)-tq*(dh-65);
+    if(i===0) dctx.moveTo(x,y); else dctx.lineTo(x,y);
+  }
+  dctx.stroke();
+
+  const curRpm=Math.round(lerp(1200,8200,prog));
+  const curHp=Math.round(lerp(45,320,prog));
+  const curTq=Math.round(lerp(140,400,Math.min(1,prog*1.4)));
+  dynoRpm.textContent=`${curRpm.toLocaleString()} RPM`;
+  dynoHp.textContent=`${curHp} CV`;
+  dynoTorque.textContent=`${curTq} Nm`;
+}
+
+updaters['s-dyno']=p=>{
+  drawDynoCurve(p);
+};
+
+/* ============================================================
+   4 · VIRTUAL COCKPIT STATS
+   ============================================================ */
+const gaugeNums=$$('.gauge-dial .metric-num');
+updaters['s-cluster']=p=>{
+  gaugeNums.forEach((el,i)=>{
+    const maxVal=+el.dataset.val;
+    const curVal=Math.round(maxVal*eOut(seg(p,0.1+i*0.1,0.6+i*0.1)));
+    el.textContent=curVal.toLocaleString('es')+(el.dataset.suf||'');
+  });
+};
+
+$$('.m-pill').forEach(btn=>{
+  btn.onclick=()=>{
+    $$('.m-pill').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  };
+});
+
+/* ============================================================
+   5 · LICENSE PLATE LASER SCANNER
+   ============================================================ */
+const plateLaser=$('#plateLaser');
+updaters['s-plate']=p=>{
+  const pos=(p*220)%100;
+  plateLaser.style.top=`${pos}%`;
+};
+
+/* ============================================================
+   6 · 3D CARDEX COLLECTOR'S ALBUM
+   ============================================================ */
+const albumBook=$('#albumBook'), pageHonda=$('#pageHonda'), pagePorsche=$('#pagePorsche');
+const mAlbumTabs=$$('.m-album-tab');
+
+mAlbumTabs.forEach(tab=>{
+  tab.onclick=()=>{
+    mAlbumTabs.forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    const isHonda=tab.dataset.page==='honda';
+    pageHonda.style.display=isHonda?'block':'none';
+    pagePorsche.style.display=isHonda?'none':'block';
+  };
+});
+
+updaters['s-album']=p=>{
+  const angle=lerp(35,0,eOut(seg(p,0,0.5)));
+  albumBook.style.transform=`rotateX(${angle-mys*6}deg) rotateY(${mxs*8}deg)`;
+};
+
+/* ============================================================
+   7 · MARVEL SNAP 3D FOIL WORKSHOP & TOUCH DRAG
+   ============================================================ */
+const snapCard=$('#snapCard'),snapFrame=$('#snapFrame'),snapBadge=$('#snapBadge'),snapPts=$('#snapPts');
+const FOIL_CONFIGS={
+  metal:{badge:'🔘 SILVER FOIL',pts:'+50 PTS',grad:'linear-gradient(135deg,#64748b,#cbd5e1 50%,#475569)'},
+  esmeralda:{badge:'🟢 ESMERALDA CARBON',pts:'+125 PTS',grad:'linear-gradient(135deg,#065f46,#10b981 50%,#047857)'},
+  zafiro:{badge:'💎 PRISMA ZAFIRO',pts:'+325 PTS',grad:'linear-gradient(135deg,#0284c7,#38bdf8 50%,#6366f1)'},
+  flare:{badge:'🔮 FLARE CÓSMICO',pts:'+650 PTS',grad:'linear-gradient(135deg,#7c3aed,#c084fc 50%,#f43f5e)'},
+  gold:{badge:'👑 ORO 24K KRACKLE',pts:'+1200 PTS',grad:'linear-gradient(135deg,#b45309,#fde047 50%,#d97706)'},
+  infinity:{badge:'🌌 INFINITY SPLIT',pts:'+2500 PTS',grad:'linear-gradient(135deg,#f43f5e,#fb923c 25%,#38bdf8 50%,#ec4899 75%)'}
+};
+
+$$('.foil-btn').forEach(btn=>{
+  btn.onclick=()=>{
+    $$('.foil-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const f=FOIL_CONFIGS[btn.dataset.f];
+    if(!f)return;
+    snapBadge.textContent=f.badge;
+    snapPts.textContent=f.pts;
+    snapFrame.style.background=f.grad;
+  };
+});
+
+// Mouse tilt
+snapCard.addEventListener('mousemove',e=>{
+  const r=snapCard.getBoundingClientRect();
+  const px=(e.clientX-r.left)/r.width*2-1;
+  const py=(e.clientY-r.top)/r.height*2-1;
+  snapCard.style.transform=`rotateY(${px*18}deg) rotateX(${-py*16}deg)`;
+  snapFrame.style.setProperty('--foilX',`${(px+1)*50}%`);
+  snapFrame.style.setProperty('--foilY',`${(py+1)*50}%`);
+});
+snapCard.addEventListener('mouseleave',()=>{
+  snapCard.style.transform='rotateY(0deg) rotateX(0deg)';
+});
+
+// Touch Dragging on Mobile
+let isTouchCard=false, tCardStartX=0, tCardStartY=0;
+snapCard.addEventListener('touchstart',e=>{
+  if(e.touches.length>0){
+    isTouchCard=true;
+    tCardStartX=e.touches[0].clientX;
+    tCardStartY=e.touches[0].clientY;
+  }
+},{passive:true});
+
+snapCard.addEventListener('touchmove',e=>{
+  if(!isTouchCard || e.touches.length===0)return;
+  const r=snapCard.getBoundingClientRect();
+  const dx=e.touches[0].clientX-tCardStartX;
+  const dy=e.touches[0].clientY-tCardStartY;
+  const px=clamp((dx/r.width)*2.5,-1,1);
+  const py=clamp((dy/r.height)*2.5,-1,1);
+  snapCard.style.transform=`rotateY(${px*24}deg) rotateX(${-py*20}deg)`;
+  snapFrame.style.setProperty('--foilX',`${(px+1)*50}%`);
+  snapFrame.style.setProperty('--foilY',`${(py+1)*50}%`);
+},{passive:true});
+
+snapCard.addEventListener('touchend',()=>{
+  isTouchCard=false;
+  setTimeout(()=>{
+    if(!isTouchCard && !gyroGranted){
+      snapCard.style.transform='rotateY(0deg) rotateX(0deg)';
+    }
+  },800);
+});
+
+updaters['s-foil']=p=>{
+  const a=eOut(seg(p,0,0.2));
+  snapCard.style.opacity=a;
+};
+
+/* ============================================================
+   8 · FORENSIC ANTI-CHEAT
+   ============================================================ */
+const forensicCards=$$('.forensic-card');
+updaters['s-forensic']=p=>{
+  forensicCards.forEach((c,i)=>{
+    const t=eOut(seg(p,0.1+i*0.15,0.4+i*0.15));
+    c.style.opacity=t;
+    c.style.transform=`translateY(${lerp(30,0,t)}px)`;
+  });
+};
+
+/* ============================================================
+   9 · OBD-II DIAGNOSTIC BENCH
+   ============================================================ */
+const DTC_DATABASE=[
+  {
+    code:"DTC P001: USE_AUTO_TRANSLATION_LOOP",
+    title:"Bucle infinito en useAutoTranslation",
+    expl:"Al pasar un objeto literal en las dependencias de useEffect dentro de useAutoTranslation, React provocaba re-renders continuos que congelaban el botón 'Saving car'. Se corrigió normalizando las claves con hashes JSON estables y mutación atómica.",
+    fix:"✓ Solución: Dependencias serializadas y comparación estricta de cadenas en el hook."
+  },
+  {
+    code:"DTC P002: MOT_ODOMETER_HIERARCHY",
+    title:"Discrepancia en lectura del odómetro",
+    expl:"El modelo estimaba inicialmente entre 30.000 y 47.000 millas basándose en la edad del coche, pero el registro real del MOT oficial indicaba 49.021 millas. Se implementó una jerarquía estricta donde la base de tráfico prevalece sobre cualquier estimación general.",
+    fix:"✓ Solución: Prioridad absoluta a DVLA official test records."
+  },
+  {
+    code:"DTC P003: UI_OVERLOAD_ACCORDIONS",
+    title:"Saturación de 25 campos técnicos",
+    expl:"La ficha técnica mostraba de golpe todos los datos de motor, cotas, historia y matrícula en pantalla vertical. Se rediseñó en módulos colapsables por defecto (Ficha técnica, Unidades fabricadas, Matrícula e Historial MOT).",
+    fix:"✓ Solución: Arquitectura de acordeones VehicleDetailAccordions."
+  },
+  {
+    code:"DTC P004: DEEP_I18N_DESCRIPTIONS",
+    title:"Traducción profunda de desplegables",
+    expl:"Al conmutar a inglés, la cabecera cambiaba pero los párrafos de ingeniería dentro de los desplegables quedaban en español. Se integró una canalización recursiva en el cliente.",
+    fix:"✓ Solución: Recursividad profunda en /api/translate con caché en memoria."
+  },
+  {
+    code:"DTC P005: ARABIC_PLATE_VALUATION",
+    title:"Tasación para matrículas árabes y dateless",
+    expl:"Se agregó el reconocimiento y valoración estimada para matrículas de Emiratos Árabes (Dubái, Abu Dabi), Kuwait y palabras dateless del Reino Unido ('BAD', 'BOSS').",
+    fix:"✓ Solución: Módulo de estimación basado en longitud de dígitos y rareza."
+  },
+  {
+    code:"DTC P006: CARDEX_BRAND_TRACKING",
+    title:"Contador por marca en el álbum",
+    expl:"En la CarDex, los usuarios necesitaban conocer el avance relativo dentro de cada firma automotriz. Se añadió el indicador 'X descubiertos / Y por desbloquear'.",
+    fix:"✓ Solución: Tracking dinámico de slots descubiertos por BrandDefinition."
+  }
+];
+
+const dtcItems=$$('.dtc-item');
+const dtcTitle=$('#dtcTitle'),dtcExpl=$('#dtcExplanation'),dtcFix=$('#dtcFix');
+
+dtcItems.forEach(item=>{
+  item.onclick=()=>{
+    dtcItems.forEach(b=>b.classList.remove('active'));
+    item.classList.add('active');
+    const d=DTC_DATABASE[+item.dataset.dtc];
+    if(!d)return;
+    dtcTitle.textContent=d.title;
+    dtcExpl.textContent=d.expl;
+    dtcFix.textContent=d.fix;
+  };
+});
+
+updaters['s-obd']=p=>{
+  const activeIdx=Math.min(5,Math.floor(p*6.2));
+  dtcItems.forEach((it,i)=>it.classList.toggle('active',i===activeIdx));
+  const cur=DTC_DATABASE[activeIdx];
+  if(cur){
+    dtcTitle.textContent=cur.title;
+    dtcExpl.textContent=cur.expl;
+    dtcFix.textContent=cur.fix;
+  }
+};
+
+/* ============================================================
+   10 · LAUNCH CONTROL TERMINAL
+   ============================================================ */
+const tb1=$('#tb1'),tb2=$('#tb2'),tb3=$('#tb3'),tb4=$('#tb4');
+updaters['s-launch']=p=>{
+  tb1.classList.toggle('lit',p>0.15);
+  tb2.classList.toggle('lit',p>0.3);
+  tb3.classList.toggle('lit',p>0.45);
+  tb4.classList.toggle('lit',p>0.6);
+};
+
+/* ============================================================
+   MAIN SCROLL & RENDER LOOP
+   ============================================================ */
+let layout=[];
+function measure(){
+  W=innerWidth; H=innerHeight; mobile=W<900;
+  onResize.forEach(f=>f());
+  layout=sceneEls.map(el=>({el,top:el.offsetTop,h:el.offsetHeight,fn:updaters[el.id]}));
+}
+
+const bar=$('#bar');
+function frame(t){
+  const target=scrollY;
+  sy=sy+(target-sy)*0.11;
+  if(Math.abs(target-sy)<0.05) sy=target;
+  mxs+=(mx-mxs)*0.06;
+  mys+=(my-mys)*0.06;
+
+  let active=0;
+  layout.forEach((s,i)=>{
+    if(s.top<=sy+H*0.5) active=i;
+    if(sy+H<s.top-H*0.25 || sy>s.top+s.h+H*0.25) return;
+    const p=clamp((sy-s.top)/Math.max(1,s.h-H));
+    s.fn && s.fn(p,t);
+  });
+
+  dots.forEach((d,i)=>d.classList.toggle('on',i===active));
+  bar.style.width=(sy/Math.max(1,document.documentElement.scrollHeight-H)*100)+'%';
+  requestAnimationFrame(frame);
+}
+
+addEventListener('resize',measure);
+addEventListener('orientationchange',()=>{setTimeout(measure,200)});
+measure();
+addEventListener('load',measure);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
