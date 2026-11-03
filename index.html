@@ -12,8 +12,8 @@
   --carbon:repeating-linear-gradient(45deg,rgba(0,0,0,.9) 0,rgba(0,0,0,.9) 2px,rgba(25,25,28,.9) 2px,rgba(25,25,28,.9) 4px);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html{background:#07080b;overflow-x:hidden}
-body{background:#07080b;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+html{background:#07080b;overflow-x:clip}
+body{background:#07080b;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;overflow-x:clip;-webkit-font-smoothing:antialiased}
 .scene{position:relative;width:100%}
 .sticky{position:sticky;top:0;height:100vh;height:100dvh;width:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 .col{flex-direction:column}
@@ -399,7 +399,7 @@ code{background:rgba(255,255,255,.08);padding:.14em .45em;border-radius:6px;font
 
       <!-- Vector Supercar Mock under scanner -->
       <div class="car-silhouette-mock">
-        <svg viewBox="0 0 680 240" width="100%" height="auto">
+        <svg viewBox="0 0 680 240" width="100%">
           <defs>
             <linearGradient id="carBody" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#334155"/><stop offset="50%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></linearGradient>
             <linearGradient id="laserGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#f43f5e"/></linearGradient>
@@ -666,7 +666,7 @@ code{background:rgba(255,255,255,.08);padding:.14em .45em;border-radius:6px;font
               <div class="snap-pts" id="snapPts">+325 PTS</div>
               <div style="position:relative;height:62%">
                 <div class="snap-car-pop" id="snapCarPop">
-                  <svg viewBox="0 0 320 150" width="100%" height="auto">
+                  <svg viewBox="0 0 320 150" width="100%">
                     <path d="M40 45 L15 15 L60 20 L50 48 Z" fill="#0f172a" stroke="#f43f5e" stroke-width="1.5"/>
                     <path d="M14 14 L75 18 L70 24 L12 20 Z" fill="#f43f5e"/>
                     <path d="M22 85 C 32 60, 55 50, 90 45 L 145 38 C 180 38, 220 50, 265 75 L 295 86 C 305 91, 308 102, 298 110 L 285 113 C 280 96, 260 90, 245 90 C 230 90, 212 100, 210 113 L 110 113 C 107 98, 90 90, 75 90 C 60 90, 44 100, 40 113 L 16 113 Z" fill="#1e293b" stroke="#38bdf8" stroke-width="1.8"/>
@@ -1020,12 +1020,13 @@ updaters['s-hero']=(p,t)=>{
    2 · COMPUTER VISION SCANNER
    ============================================================ */
 const laserBeam=$('#laserBeam'),bboxCar=$('.bbox-car'),bboxPlate=$('.bbox-plate'),bboxWing=$('.bbox-wing');
-updaters['s-scan']=p=>{
-  const beamY=p*100;
+updaters['s-scan']=(p,t)=>{
+  const sweep=Math.sin(t*0.0035)*14;
+  const beamY=clamp(p*100+sweep*(1-p*0.5),2,98);
   laserBeam.style.top=`${beamY}%`;
-  bboxCar.style.opacity=seg(p,0.1,0.25);
-  bboxPlate.style.opacity=seg(p,0.3,0.45);
-  bboxWing.style.opacity=seg(p,0.5,0.65);
+  bboxCar.style.opacity=seg(p,0.08,0.25);
+  bboxPlate.style.opacity=seg(p,0.25,0.45);
+  bboxWing.style.opacity=seg(p,0.45,0.65);
 };
 
 /* ============================================================
@@ -1034,7 +1035,7 @@ updaters['s-scan']=p=>{
 const dcv=$('#dynoCanvas'),dctx=dcv.getContext('2d');
 const dynoHp=$('#dynoHp'),dynoTorque=$('#dynoTorque'),dynoRpm=$('#dynoRpm');
 
-function drawDynoCurve(p){
+function drawDynoCurve(p,t){
   const w=dcv.clientWidth, h=dcv.clientHeight;
   dcv.width=w*windDpr; dcv.height=h*windDpr;
   dctx.clearRect(0,0,dcv.width,dcv.height);
@@ -1074,7 +1075,8 @@ function drawDynoCurve(p){
   }
   dctx.stroke();
 
-  const curRpm=Math.round(lerp(1200,8200,prog));
+  const idleFlutter = (prog>0.05 && prog<0.95) ? Math.sin(t*0.02)*18 : 0;
+  const curRpm=Math.max(1200, Math.round(lerp(1200,8200,prog) + idleFlutter));
   const curHp=Math.round(lerp(45,320,prog));
   const curTq=Math.round(lerp(140,400,Math.min(1,prog*1.4)));
   dynoRpm.textContent=`${curRpm.toLocaleString()} RPM`;
@@ -1082,8 +1084,8 @@ function drawDynoCurve(p){
   dynoTorque.textContent=`${curTq} Nm`;
 }
 
-updaters['s-dyno']=p=>{
-  drawDynoCurve(p);
+updaters['s-dyno']=(p,t)=>{
+  drawDynoCurve(p,t);
 };
 
 /* ============================================================
@@ -1109,8 +1111,9 @@ $$('.m-pill').forEach(btn=>{
    5 · LICENSE PLATE LASER SCANNER
    ============================================================ */
 const plateLaser=$('#plateLaser');
-updaters['s-plate']=p=>{
-  const pos=(p*220)%100;
+updaters['s-plate']=(p,t)=>{
+  const sweep=((t*0.08)%100);
+  const pos=(p*150+sweep*0.6)%100;
   plateLaser.style.top=`${pos}%`;
 };
 
@@ -1130,9 +1133,10 @@ mAlbumTabs.forEach(tab=>{
   };
 });
 
-updaters['s-album']=p=>{
+updaters['s-album']=(p,t)=>{
   const angle=lerp(35,0,eOut(seg(p,0,0.5)));
-  albumBook.style.transform=`rotateX(${angle-mys*6}deg) rotateY(${mxs*8}deg)`;
+  const breathe=Math.sin(t*0.0012)*2.5;
+  albumBook.style.transform=`rotateX(${angle-mys*6+breathe}deg) rotateY(${mxs*8}deg)`;
 };
 
 /* ============================================================
@@ -1204,9 +1208,16 @@ snapCard.addEventListener('touchend',()=>{
   },800);
 });
 
-updaters['s-foil']=p=>{
+updaters['s-foil']=(p,t)=>{
   const a=eOut(seg(p,0,0.2));
   snapCard.style.opacity=a;
+  if(!isTouchCard && !gyroGranted){
+    const floatTiltY = Math.sin(t * 0.0015) * 12 + mxs * 16;
+    const floatTiltX = Math.cos(t * 0.0018) * 9 - mys * 14;
+    snapCard.style.transform = `rotateY(${floatTiltY}deg) rotateX(${floatTiltX}deg)`;
+    snapFrame.style.setProperty('--foilX', `${50 + floatTiltY * 2.2}%`);
+    snapFrame.style.setProperty('--foilY', `${50 + floatTiltX * 2.2}%`);
+  }
 };
 
 /* ============================================================
@@ -1313,10 +1324,23 @@ function measure(){
 const bar=$('#bar');
 function frame(t){
   const target=scrollY;
-  sy=sy+(target-sy)*0.11;
-  if(Math.abs(target-sy)<0.05) sy=target;
-  mxs+=(mx-mxs)*0.06;
-  mys+=(my-mys)*0.06;
+  const dist=target-sy;
+  if(mobile){
+    sy=target;
+  } else {
+    sy=Math.abs(dist)<0.5?target:sy+dist*(Math.abs(dist)>300?0.32:0.18);
+  }
+
+  // Ambient drift when idle
+  if(Math.abs(mx)<0.05 && Math.abs(my)<0.05 && !gyroGranted){
+    const idleX = Math.sin(t * 0.001) * 0.25;
+    const idleY = Math.cos(t * 0.0014) * 0.2;
+    mxs += (idleX - mxs) * 0.04;
+    mys += (idleY - mys) * 0.04;
+  } else {
+    mxs+=(mx-mxs)*0.06;
+    mys+=(my-mys)*0.06;
+  }
 
   let active=0;
   layout.forEach((s,i)=>{
@@ -1335,6 +1359,8 @@ addEventListener('resize',measure);
 addEventListener('orientationchange',()=>{setTimeout(measure,200)});
 measure();
 addEventListener('load',measure);
+setTimeout(measure, 300);
+layout.forEach(s=>{ if(s.fn) s.fn(0,0); });
 requestAnimationFrame(frame);
 </script>
 </body>
